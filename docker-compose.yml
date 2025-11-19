@@ -1,0 +1,14 @@
+version: "3.9"
+
+services:
+  quiz-agent:
+    build: .
+    image: tds-project-2-quiz-answer-machine
+    environment:
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+      - OPENAI_BASE_URL=${OPENAI_BASE_URL:-}
+      - OPENAI_MODEL=${OPENAI_MODEL:-gpt-5-nano}
+      - STUDENT_SECRET=${STUDENT_SECRET}
+    ports:
+      - "8000:8000"
+
