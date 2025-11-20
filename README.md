@@ -353,3 +353,10 @@ With this README and the existing code, you should be able to:
 - run the service locally,
 - hook it up to the demo endpoint from the project brief,
 - and then deploy it to your own HTTPS endpoint for grading.
+
+---
+
+## 12. CI/CD and cleanup docs
+
+- `docs/cicd.md` – how to set up the NUC + GitHub Actions + Docker + Cloudflare Tunnel pipeline for this project.
+- `docs/cleanup.md` – how to completely tear down the runner, Docker resources, tunnel, and secrets after the project.
