@@ -1,0 +1,25 @@
+name: Deploy to NUC
+
+on:
+  push:
+    branches: [ "main" ]
+
+jobs:
+  deploy:
+    runs-on: self-hosted  # <--- This targets your NUC runner specifically
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Stop old containers
+        # || true prevents failure if containers aren't running yet
+        run: docker compose down || true
+
+      - name: Build and Start
+        # --build ensures we use the latest code changes
+        # -d runs in detached mode (background)
+        run: docker compose up -d --build
+      
+      - name: Cleanup
+        # Removes unused images to save space on your NUC
+        run: docker image prune -f
