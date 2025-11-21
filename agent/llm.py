@@ -1,11 +1,15 @@
 from __future__ import annotations
 
+import json
+import logging
 from typing import Any, Dict, List, Optional
-
 from openai import OpenAI
 
 from config import Settings
 from . import prompts
+
+
+logger = logging.getLogger(__name__)
 
 
 class LlmClient:
@@ -42,6 +46,17 @@ class LlmClient:
             f"Previous attempts and errors:\n{history}"
         )
 
+        logger.info(
+            "LLM request payload: %s",
+            json.dumps(
+                {
+                    "model": self._model,
+                    "instructions": prompts.SYSTEM_PROMPT,
+                    "input": combined_input,
+                }
+            ),
+        )
+
         response = self._client.responses.create(
             model=self._model,
             instructions=prompts.SYSTEM_PROMPT,
@@ -50,6 +65,7 @@ class LlmClient:
         )
 
         content: Optional[str] = getattr(response, "output_text", None)
+        logger.info("LLM response output_text: %r", content)
         if not content:
             raise RuntimeError("Model returned empty content.")
         return content
