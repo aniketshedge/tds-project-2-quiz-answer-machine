@@ -10,6 +10,9 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
+        with:
+          # Keep local files like .env on the NUC between runs
+          clean: false
 
       - name: Stop old containers
         # || true prevents failure if containers aren't running yet
