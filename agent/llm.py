@@ -38,7 +38,6 @@ class LlmClient:
             model=self._model,
             instructions=prompts.SYSTEM_PROMPT,
             input=combined_input,
-            temperature=0.2,
             reasoning={"effort": "medium"},
         )
 
