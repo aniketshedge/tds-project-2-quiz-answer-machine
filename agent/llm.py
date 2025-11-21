@@ -27,9 +27,17 @@ class LlmClient:
         """
         combined_input = (
             "You are given the text content of a quiz web page. "
+            "The page may include example JSON payloads with fields like "
+            "\"email\", \"secret\", and \"answer\" that describe how an external "
+            "caller will submit the result.\n\n"
+            "Important:\n"
+            "- The \"secret\" field is an authentication token and is NOT the quiz answer.\n"
+            "- Your job is to read the natural-language question on the page and "
+            "compute the value that should go into the \"answer\" field.\n"
+            "- Your Python code must NOT print the secret or any authentication tokens.\n\n"
             "Write Python code that loads any required data from the page text, "
             "performs the necessary computations, and finally prints ONLY the "
-            "answer to stdout.\n\n"
+            "answer to stdout (no extra text).\n\n"
             f"Page text:\n{page_text}\n\n"
             f"Previous attempts and errors:\n{history}"
         )
