@@ -25,31 +25,24 @@ class LlmClient:
         Ask the model to propose Python code that, when executed, produces
         the final quiz answer and prints it to stdout.
         """
-        messages = [
-            {
-                "role": "system",
-                "content": prompts.SYSTEM_PROMPT,
-            },
-            {
-                "role": "user",
-                "content": (
-                    "You are given the text content of a quiz web page. "
-                    "Write Python code that loads any required data from the page text, "
-                    "performs the necessary computations, and finally prints ONLY the "
-                    "answer to stdout.\n\n"
-                    f"Page text:\n{page_text}\n\n"
-                    f"Previous attempts and errors:\n{history}"
-                ),
-            },
-        ]
-
-        response = self._client.chat.completions.create(
-            model=self._model,
-            messages=messages,  # type: ignore[arg-type]
-            temperature=0.2,
+        combined_input = (
+            "You are given the text content of a quiz web page. "
+            "Write Python code that loads any required data from the page text, "
+            "performs the necessary computations, and finally prints ONLY the "
+            "answer to stdout.\n\n"
+            f"Page text:\n{page_text}\n\n"
+            f"Previous attempts and errors:\n{history}"
         )
 
-        content: Optional[str] = response.choices[0].message.content
+        response = self._client.responses.create(
+            model=self._model,
+            instructions=prompts.SYSTEM_PROMPT,
+            input=combined_input,
+            temperature=0.2,
+            reasoning={"effort": "medium"},
+        )
+
+        content: Optional[str] = getattr(response, "output_text", None)
         if not content:
             raise RuntimeError("Model returned empty content.")
         return content
@@ -60,4 +53,3 @@ class LlmClient:
         A more advanced implementation could ask the model to sanitize it.
         """
         return execution_output.strip()
-

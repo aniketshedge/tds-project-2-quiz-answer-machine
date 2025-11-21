@@ -7,7 +7,7 @@ from pydantic import BaseSettings, AnyHttpUrl
 class Settings(BaseSettings):
     openai_api_key: str
     openai_base_url: Optional[AnyHttpUrl] = None
-    openai_model: str = "gpt-5-nano"
+    openai_model: str = "gpt-5.1-nano"
 
     student_secret: str
 
@@ -25,4 +25,3 @@ class Settings(BaseSettings):
 @lru_cache(maxsize=1)
 def get_settings() -> Settings:
     return Settings()
-
