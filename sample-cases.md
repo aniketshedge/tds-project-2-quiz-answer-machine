@@ -77,3 +77,35 @@ The following are two demo cases. Check if these will be handled by the code:
       "delay": 173
   }
 ```
+
+## Question 3 https://tds-llm-analysis.s-anand.net/demo-audio?email=21f1006362%40ds.study.iitm.ac.in&id=7358
+#### Source of HTML
+```
+<p><audio src="demo-audio.opus" controls></audio></p>
+
+<p><a href="demo-audio-data.csv">CSV file</a></p>
+<p>Cutoff: <span id="cutoff"></span></p>
+
+<p>POST to JSON to <span class="origin"></span>/submit</p>
+
+<pre>
+{
+  "email": "your email",
+  "secret": "your secret",
+  "url": "<span class="origin"></span>/demo-audio",
+  "answer": ...
+}
+</pre>
+
+<script type="module">
+import { emailNumber, getEmail, sha1 } from "./utils.js";
+document.querySelector("#cutoff").innerHTML = (await emailNumber())
+  || "Please provide ?email=";
+for (const el of document.querySelectorAll(".origin")) {
+  el.innerHTML = window.location.origin;
+}
+</script>
+```
+Audio link: https://tds-llm-analysis.s-anand.net/demo-audio.opus
+CSV link: https://tds-llm-analysis.s-anand.net/demo-audio-data.csv
+

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import io
 import json
 from typing import Any, Dict, List, Optional
 
@@ -21,6 +22,23 @@ class LlmClient:
             kwargs["base_url"] = str(settings.openai_base_url)
         self._client = OpenAI(**kwargs)
         self._model = settings.openai_model
+        self._audio_model = settings.openai_transcription_model
+
+    def transcribe_audio(self, audio_bytes: bytes) -> str:
+        """
+        Transcribe an audio clip to text using the configured transcription model.
+        """
+        file_obj = io.BytesIO(audio_bytes)
+        file_obj.name = "audio.opus"
+
+        response = self._client.audio.transcriptions.create(
+            model=self._audio_model,
+            file=file_obj,
+        )
+        text: Optional[str] = getattr(response, "text", None)
+        if not text:
+            raise RuntimeError("Audio transcription returned empty text.")
+        return text
 
     def plan_and_code(
         self,
@@ -52,9 +70,10 @@ class LlmClient:
             "treat them as relative to the current page URL using standard URL-joining logic "
             "(for example via `urllib.parse.urljoin`).\n\n"
             "Write Python code that loads any required data from the page text and any "
-            "linked URLs, performs the necessary computations, and finally prints ONLY the "
+            "linked URLs (including CSVs or other files mentioned explicitly), performs "
+            "the necessary computations, and finally prints ONLY the "
             "answer to stdout (no extra text).\n\n"
-            f"Page text:\n{page_text}\n\n"
+            f"Page text and extracted context:\n{page_text}\n\n"
             f"Previous attempts and errors:\n{history}"
         )
 

@@ -5,6 +5,8 @@ import time
 from dataclasses import dataclass, field
 from typing import Any, Dict, List
 
+import requests
+
 from config import Settings
 from tools.browser import BrowserClient
 from tools.sandbox import SandboxExecutor
@@ -32,14 +34,51 @@ class AgentFlow:
 
         while time.time() < deadline:
             page = await browser.get(current_url)
-
-            # Simple text-only implementation for now.
             page_text = page.text
+
+            # Augment page text with audio transcripts and explicit data resource hints.
+            combined_page_text = page_text
+
+            # Transcribe any audio sources found on the page.
+            transcripts: List[Dict[str, Any]] = []
+            if page.audio_urls:
+                loop = asyncio.get_running_loop()
+                for audio_url in page.audio_urls:
+                    try:
+                        def _get() -> bytes:
+                            resp = requests.get(
+                                audio_url,
+                                timeout=self.settings.browser_timeout_ms / 1000,
+                            )
+                            resp.raise_for_status()
+                            return resp.content
+
+                        audio_bytes = await loop.run_in_executor(None, _get)
+                        text = llm.transcribe_audio(audio_bytes)
+                        transcripts.append({"url": audio_url, "text": text})
+                    except Exception as exc:
+                        # Record the error in history so the LLM can see it if needed.
+                        self.history.append(
+                            {
+                                "error": f"Audio transcription failed for {audio_url}: {exc}",
+                                "stage": "audio_transcription",
+                            }
+                        )
+
+            if transcripts:
+                combined_page_text += "\n\nAudio transcripts:\n"
+                for item in transcripts:
+                    combined_page_text += f"- Source: {item['url']}\n{item['text']}\n"
+
+            if page.data_urls:
+                combined_page_text += "\n\nData resources linked from the page:\n"
+                for data_url in page.data_urls:
+                    combined_page_text += f"- {data_url}\n"
 
             answer = None
             for attempt in range(3):
                 code = llm.plan_and_code(
-                    page_text=page_text,
+                    page_text=combined_page_text,
                     history=self.history,
                     current_url=current_url,
                     email=self.email,

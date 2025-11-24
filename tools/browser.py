@@ -3,10 +3,11 @@ from __future__ import annotations
 import asyncio
 import json
 import re
-from dataclasses import dataclass
-from typing import Optional
+from dataclasses import dataclass, field
+from typing import Optional, List
 
 import requests
+from bs4 import BeautifulSoup
 from playwright.async_api import async_playwright
 from urllib.parse import urljoin
 
@@ -18,6 +19,9 @@ class PageData:
     url: str
     text: str
     screenshot: Optional[bytes] = None
+    html: Optional[str] = None
+    audio_urls: List[str] = field(default_factory=list)
+    data_urls: List[str] = field(default_factory=list)
 
 
 @dataclass
@@ -39,7 +43,7 @@ class BrowserClient:
     async def get(self, url: str) -> PageData:
         """
         Use Playwright to render the page (executing JavaScript),
-        then return the visible text and a full-page screenshot.
+        then return the visible text, HTML, and a full-page screenshot.
         """
         async with async_playwright() as p:
             browser = await p.chromium.launch(headless=True)
@@ -47,11 +51,41 @@ class BrowserClient:
                 page = await browser.new_page()
                 await page.goto(url, wait_until="networkidle", timeout=self.timeout_ms)
                 text = await page.inner_text("body")
+                html = await page.inner_html("body")
                 screenshot = await page.screenshot(full_page=True)
             finally:
                 await browser.close()
 
-        return PageData(url=url, text=text, screenshot=screenshot)
+        audio_urls: List[str] = []
+        data_urls: List[str] = []
+
+        if html:
+            soup = BeautifulSoup(html, "html.parser")
+
+            # Audio sources (e.g. <audio src="demo-audio.opus">)
+            for audio in soup.find_all("audio"):
+                src = audio.get("src")
+                if not src:
+                    continue
+                audio_urls.append(urljoin(url, src))
+
+            # Data files (CSV / TSV / Excel etc.)
+            data_exts = (".csv", ".tsv", ".xlsx", ".xls")
+            for link in soup.find_all("a", href=True):
+                href = link["href"]
+                if not href:
+                    continue
+                if any(href.lower().endswith(ext) for ext in data_exts):
+                    data_urls.append(urljoin(url, href))
+
+        return PageData(
+            url=url,
+            text=text,
+            screenshot=screenshot,
+            html=html,
+            audio_urls=audio_urls,
+            data_urls=data_urls,
+        )
 
     def _identify_submission_target(self, page_text: str, quiz_url: str) -> Optional[str]:
         """
