@@ -83,7 +83,30 @@ class AgentFlow:
                     current_url=current_url,
                     email=self.email,
                 )
-                exec_result = await sandbox.run(code)
+
+                # Provide the JS-rendered page context and discovered data URLs
+                # directly to the sandboxed code as Python variables so the
+                # generated code can rely on them instead of re-fetching
+                # the main page HTML.
+                context_prefix = (
+                    f"PAGE_TEXT = {combined_page_text!r}\n"
+                    f"CURRENT_URL = {current_url!r}\n"
+                    f"DATA_URLS = {page.data_urls!r}\n"
+                )
+                wrapped_code = context_prefix + "\n" + code
+
+                exec_result = await sandbox.run(wrapped_code)
+
+                if exec_result.returncode != 0:
+                    # Record sandbox stderr so subsequent attempts can adapt.
+                    self.history.append(
+                        {
+                            "error": exec_result.stderr[:300],
+                            "stage": "execution",
+                            "attempt": attempt + 1,
+                        }
+                    )
+
                 answer = llm.parse_answer(exec_result.stdout)
 
                 submission = await browser.post_answer(

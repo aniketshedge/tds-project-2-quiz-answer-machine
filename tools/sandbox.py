@@ -35,4 +35,3 @@ class SandboxExecutor:
             stderr=stderr_bytes.decode("utf-8", errors="ignore"),
             returncode=proc.returncode,
         )
-
