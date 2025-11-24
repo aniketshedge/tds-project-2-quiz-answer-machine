@@ -53,6 +53,7 @@ Files and directories:
 - `tools/browser.py` – uses **Playwright** to:
   - render quiz pages (with JavaScript),
   - extract visible text and screenshots,
+  - detect media/data links (for example audio files and CSVs),
   - find the submission URL, and
   - POST your answer JSON to that URL.
 - `tools/sandbox.py` – runs model-generated Python code in a subprocess.
@@ -72,9 +73,10 @@ Data flow (simplified):
    - opens the page with Playwright,
    - waits for network to be idle,
    - gets the page text,
-   - takes a full-page screenshot.
+   - takes a full-page screenshot,
+   - discovers media and data links (such as audio elements and CSV downloads).
 5. `LlmClient.plan_and_code` in `agent/llm.py`:
-   - sends the page text (and history of previous errors) to the LLM,
+   - sends the page text plus any extracted audio transcripts and data-resource hints (and history of previous errors) to the LLM,
    - asks it to generate Python code that prints the answer.
 6. `SandboxExecutor.run` in `tools/sandbox.py`:
    - runs the generated code using `python -c ...`,
@@ -88,7 +90,7 @@ Data flow (simplified):
    - if `correct` and a new `url` exists → update `current_url` and repeat.
    - if `correct` and there is no new `url` → stop, quiz complete.
    - if `incorrect` → log the reason, maybe retry or move to next URL.
-10. When done (or when the time limit expires), `/run` returns a final message like `"Quiz Completed"` or `"Timed out before completing quiz."`.
+10. `/run` returns immediately with HTTP 200 once the secret is validated, while the quiz runs in the background. The detailed outcome of each run is recorded in the log file under `logs/agent.log`.
 
 ---
 
@@ -233,20 +235,16 @@ If you prefer to run directly on your machine:
 
 ### Responses
 
-- **200 OK** – accepted and processed:
+- **200 OK** – secret matched and the request was accepted:
 
   ```jsonc
   {
     "status": "ok",
-    "detail": "Quiz Completed"
+    "detail": "Accepted"
   }
   ```
 
-  The `detail` field is a human-readable summary, for example:
-
-  - `"Quiz Completed"`
-  - `"Failed to solve quiz within attempts.""`
-  - `"Timed out before completing quiz."`
+  The agent continues solving the quiz asynchronously. Progress and outcomes (such as `"Quiz Completed"`, `"Failed to solve quiz within attempts."`, or `"Timed out before completing quiz."`) are written to `logs/agent.log` inside the container (and to `./logs/agent.log` on the host when using Docker Compose).
 
 - **400 Bad Request** – invalid JSON or request body:
 
@@ -311,15 +309,14 @@ This is intentionally general so that it can handle many different quiz pages, a
 The LLM prompt strategy is defined in `agent/prompts.py`:
 
 - `SYSTEM_PROMPT` – focused on:
-  - solving computational quizzes only,
-  - never leaking secrets,
-  - replying with `ACCESS_DENIED` if asked for the code word.
-- `USER_OVERRIDE_PROMPT` – a “break the system prompt” style user prompt (for the separate prompt-competition part of the project).
+  - solving computational quizzes only, and
+  - not leaking internal configuration or secrets.
+- `USER_OVERRIDE_PROMPT` – legacy text from an earlier prompt-competition experiment (not used by the main agent flow).
 
 The code in `agent/llm.py` uses `SYSTEM_PROMPT` and constructs an additional user message that describes:
 
-- the page text,
-- previous errors,
+- the page text (plus any audio transcripts and discovered data resources),
+- previous errors and execution history,
 - and asks the model to output Python code that prints only the final answer.
 
 You are free to tune these prompts further as long as the behaviour stays within the project rules.
@@ -334,6 +331,7 @@ Once the basics work, you can improve:
 - **Safer sandbox** – restrict what the generated Python code can do (timeouts, memory limits, allowed imports, etc.).
 - **Better URL detection** – tighten the heuristics for finding the submit URL.
 - **Logging & monitoring** – keep structured logs of each quiz run to help debug and explain your viva answers.
+  - This project already writes structured logs to `logs/agent.log` (mounted to `./logs/agent.log` when using Docker Compose).
 
 ---
 
@@ -342,6 +340,9 @@ Once the basics work, you can improve:
 - If Playwright fails to launch the browser:
   - Make sure you are using the Docker setup (which includes browsers), or
   - On local Python, run `python -m playwright install`.
+- If audio-based quizzes consistently fail:
+  - Ensure your OpenAI-compatible endpoint supports the audio transcription API.
+  - When running without Docker, you may also need `ffmpeg` installed locally for audio format conversion.
 - If you always see `"Timed out before completing quiz."`:
   - Check that your `OPENAI_API_KEY` / `OPENAI_BASE_URL` are correct.
   - Verify that the quiz URL is reachable from where you are running the container.
