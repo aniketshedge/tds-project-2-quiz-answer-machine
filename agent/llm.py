@@ -2,9 +2,12 @@ from __future__ import annotations
 
 import io
 import json
+import os
+import subprocess
+import tempfile
 from typing import Any, Dict, List, Optional
 
-from openai import OpenAI
+from openai import OpenAI, BadRequestError
 
 from config import Settings
 from logging_utils import log_event
@@ -28,17 +31,64 @@ class LlmClient:
         """
         Transcribe an audio clip to text using the configured transcription model.
         """
-        file_obj = io.BytesIO(audio_bytes)
-        file_obj.name = "audio.opus"
+        # First attempt: send the original bytes as-is.
+        def _call_transcription(b: bytes, filename: str) -> str:
+            file_obj = io.BytesIO(b)
+            file_obj.name = filename
+            response = self._client.audio.transcriptions.create(
+                model=self._audio_model,
+                file=file_obj,
+            )
+            text: Optional[str] = getattr(response, "text", None)
+            if not text:
+                raise RuntimeError("Audio transcription returned empty text.")
+            return text
 
-        response = self._client.audio.transcriptions.create(
-            model=self._audio_model,
-            file=file_obj,
-        )
-        text: Optional[str] = getattr(response, "text", None)
-        if not text:
-            raise RuntimeError("Audio transcription returned empty text.")
-        return text
+        try:
+            return _call_transcription(audio_bytes, "audio.opus")
+        except BadRequestError as exc:
+            message = str(exc)
+            # Custom endpoints may reject OPUS; attempt a local conversion
+            # to WAV using ffmpeg, then retry once.
+            if "Unsupported file format" not in message and "unsupported_value" not in message:
+                raise
+
+            # Best-effort conversion; if this fails we re-raise the original error.
+            try:
+                with tempfile.NamedTemporaryFile(suffix=".opus", delete=False) as src:
+                    src.write(audio_bytes)
+                    src_path = src.name
+                dst_path = src_path + ".wav"
+                try:
+                    subprocess.run(
+                        [
+                            "ffmpeg",
+                            "-y",
+                            "-i",
+                            src_path,
+                            "-acodec",
+                            "pcm_s16le",
+                            "-ar",
+                            "16000",
+                            dst_path,
+                        ],
+                        check=True,
+                        stdout=subprocess.DEVNULL,
+                        stderr=subprocess.DEVNULL,
+                    )
+                    with open(dst_path, "rb") as f:
+                        wav_bytes = f.read()
+                finally:
+                    for p in (src_path, dst_path):
+                        try:
+                            os.remove(p)
+                        except OSError:
+                            pass
+
+                return _call_transcription(wav_bytes, "audio.wav")
+            except Exception:
+                # If conversion or second call fails, surface the original error.
+                raise exc
 
     def plan_and_code(
         self,
