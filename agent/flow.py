@@ -43,6 +43,11 @@ class AgentFlow:
             # Transcribe any audio sources found on the page.
             transcripts: List[Dict[str, Any]] = []
             if page.audio_urls:
+                log_event(
+                    "AUDIO_SOURCES_FOUND",
+                    current_url=current_url,
+                    audio_urls=page.audio_urls,
+                )
                 loop = asyncio.get_running_loop()
                 for audio_url in page.audio_urls:
                     try:
@@ -64,12 +69,19 @@ class AgentFlow:
                             transcript=text,
                         )
                     except Exception as exc:
-                        # Record the error in history so the LLM can see it if needed.
+                        # Record the error in history so the LLM can see it if needed,
+                        # and also log it explicitly for debugging.
                         self.history.append(
                             {
                                 "error": f"Audio transcription failed for {audio_url}: {exc}",
                                 "stage": "audio_transcription",
                             }
+                        )
+                        log_event(
+                            "AUDIO_TRANSCRIPT_ERROR",
+                            current_url=current_url,
+                            audio_url=audio_url,
+                            error=str(exc),
                         )
 
             if transcripts:
