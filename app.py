@@ -6,6 +6,7 @@ from pydantic import BaseModel
 from config import Settings, get_settings
 from agent.flow import AgentFlow
 from logging_utils import log_event
+import asyncio
 
 
 class RunRequest(BaseModel):
@@ -57,22 +58,28 @@ async def run_quiz(request: Request, req: RunRequest) -> RunResponse:
         settings=settings,
     )
 
-    try:
-        result = await agent.run()
-        log_event(
-            "RUN_COMPLETED",
-            email=req.email,
-            url=req.url,
-            result=result,
-        )
-        return RunResponse(status="ok", detail=result)
-    except Exception as exc:  # pragma: no cover - defensive catch-all
-        log_event(
-            "RUN_ERROR",
-            email=req.email,
-            url=req.url,
-            error=str(exc),
-        )
-        # Per brief, secret matched so we must still return HTTP 200.
-        return RunResponse(status="error", detail="Internal error while processing quiz.")
+    async def _run_in_background() -> None:
+        """
+        Execute the agent flow without blocking the HTTP response.
+        All outcomes are recorded in the log file.
+        """
+        try:
+            result = await agent.run()
+            log_event(
+                "RUN_COMPLETED",
+                email=req.email,
+                url=req.url,
+                result=result,
+            )
+        except Exception as exc:  # pragma: no cover - defensive catch-all
+            log_event(
+                "RUN_ERROR",
+                email=req.email,
+                url=req.url,
+                error=str(exc),
+            )
 
+    # Fire-and-forget background execution; caller gets 200 immediately.
+    asyncio.create_task(_run_in_background())
+
+    return RunResponse(status="ok", detail="Accepted")
