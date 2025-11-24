@@ -233,4 +233,15 @@ class BrowserClient:
             payload=json.dumps(safe_payload),
         )
 
+        # Log the evaluator's submission result (correctness, next URL, feedback).
+        log_event(
+            "SUBMISSION_RESULT",
+            submit_url=submit_url,
+            status_code=response.status_code,
+            correct=correct,
+            next_url=next_url,
+            reason=reason,
+            raw_response=json.dumps(data),
+        )
+
         return SubmissionResponse(correct=correct, next_url=next_url, reason=reason)
