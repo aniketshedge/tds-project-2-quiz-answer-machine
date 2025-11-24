@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import json
 import re
 from dataclasses import dataclass
 from typing import Optional
@@ -8,6 +9,8 @@ from typing import Optional
 import requests
 from playwright.async_api import async_playwright
 from urllib.parse import urljoin
+
+from logging_utils import log_event
 
 
 @dataclass
@@ -156,11 +159,27 @@ class BrowserClient:
         try:
             response = await loop.run_in_executor(None, _send)
         except Exception as exc:  # pragma: no cover - network error path
+            log_event(
+                "SENT_POST",
+                submit_url=submit_url,
+                status_code="network_error",
+                error=str(exc),
+            )
             return SubmissionResponse(correct=False, reason=f"Error submitting answer: {exc}")
 
         try:
             data = response.json()
         except Exception as exc:  # pragma: no cover - unexpected response path
+            safe_payload = dict(payload)
+            if "secret" in safe_payload:
+                safe_payload["secret"] = "***"
+            log_event(
+                "SENT_POST",
+                submit_url=submit_url,
+                status_code=response.status_code,
+                payload=json.dumps(safe_payload),
+                error=f"Invalid JSON response: {exc}",
+            )
             return SubmissionResponse(
                 correct=False,
                 reason=f"Invalid response from submission endpoint (status {response.status_code}): {exc}",
@@ -169,5 +188,15 @@ class BrowserClient:
         correct = bool(data.get("correct"))
         next_url = data.get("url")
         reason = data.get("reason")
+
+        safe_payload = dict(payload)
+        if "secret" in safe_payload:
+            safe_payload["secret"] = "***"
+        log_event(
+            "SENT_POST",
+            submit_url=submit_url,
+            status_code=response.status_code,
+            payload=json.dumps(safe_payload),
+        )
 
         return SubmissionResponse(correct=correct, next_url=next_url, reason=reason)

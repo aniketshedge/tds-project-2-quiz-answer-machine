@@ -11,4 +11,5 @@ services:
       - STUDENT_SECRET=${STUDENT_SECRET}
     ports:
       - "8000:8000"
-
+    volumes:
+      - ./logs:/app/logs
