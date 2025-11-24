@@ -88,7 +88,6 @@ class LlmClient:
             "LLM_REQUEST",
             model=self._model,
             current_url=current_url,
-            input_preview=combined_input[:500],
         )
 
         response = self._client.responses.create(
@@ -103,7 +102,7 @@ class LlmClient:
             "LLM_RESPONSE",
             model=self._model,
             current_url=current_url,
-            output_preview=(content[:500] if content else None),
+            output_full=content,
         )
         if not content:
             raise RuntimeError("Model returned empty content.")
