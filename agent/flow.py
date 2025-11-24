@@ -38,7 +38,12 @@ class AgentFlow:
 
             answer = None
             for attempt in range(3):
-                code = llm.plan_and_code(page_text=page_text, history=self.history)
+                code = llm.plan_and_code(
+                    page_text=page_text,
+                    history=self.history,
+                    current_url=current_url,
+                    email=self.email,
+                )
                 exec_result = await sandbox.run(code)
                 answer = llm.parse_answer(exec_result.stdout)
 

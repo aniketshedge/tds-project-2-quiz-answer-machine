@@ -7,6 +7,7 @@ from typing import Optional
 
 import requests
 from playwright.async_api import async_playwright
+from urllib.parse import urljoin
 
 
 @dataclass
@@ -57,36 +58,62 @@ class BrowserClient:
         to POST the answer (for example: "Post your answer to
         https://example.com/submit ..."). We scan for URLs and prefer those
         that appear near phrases like "post your answer" or "submit".
+
+        This implementation supports both absolute URLs and relative paths
+        such as "/submit", resolving the latter against the quiz_url.
         """
-        urls = re.findall(r"https?://[^\s\"'<>]+", page_text)
-        if not urls:
+        quiz_url_lower = quiz_url.strip().lower()
+        lower_text = page_text.lower()
+
+        # Collect candidate (display_text, absolute_url) pairs.
+        candidates: list[tuple[str, str]] = []
+
+        # 1) Absolute URLs.
+        abs_urls = re.findall(r"https?://[^\s\"'<>]+", page_text)
+        for url in abs_urls:
+            full_url = url.strip()
+            if not full_url:
+                continue
+            full_lower = full_url.lower()
+            if full_lower == quiz_url_lower:
+                continue
+            if any(full_url == existing_full for _, existing_full in candidates):
+                continue
+            # display_text == full_url for absolute URLs.
+            candidates.append((full_url, full_url))
+
+        # 2) Relative paths starting with "/".
+        rel_paths = re.findall(r"/[^\s\"'<>]+", page_text)
+        for path in rel_paths:
+            path = path.strip()
+            if not path:
+                continue
+            full_url = urljoin(quiz_url, path)
+            full_lower = full_url.lower()
+            if full_lower == quiz_url_lower:
+                continue
+            if any(full_url == existing_full for _, existing_full in candidates):
+                continue
+            candidates.append((path, full_url))
+
+        if not candidates:
             return None
 
-        # Deduplicate while preserving order.
-        seen: list[str] = []
-        for url in urls:
-            if url not in seen:
-                seen.append(url)
-
-        quiz_url_lower = quiz_url.strip().lower()
-        candidates = [u for u in seen if u.strip().lower() != quiz_url_lower]
-        if not candidates:
-            candidates = seen
-
-        lower_text = page_text.lower()
+        # Rank candidates by proximity to "post your answer" or "submit".
         ranked: list[str] = []
-        for url in candidates:
-            idx = lower_text.find(url.lower())
+        for display_text, full_url in candidates:
+            idx = lower_text.find(display_text.lower())
             if idx == -1:
                 continue
             window = lower_text[max(0, idx - 120) : idx + 120]
             if "post your answer" in window or "submit" in window:
-                ranked.append(url)
+                ranked.append(full_url)
 
         if ranked:
             return ranked[0]
 
-        return candidates[0] if candidates else None
+        # Fallback: first candidate in discovery order.
+        return candidates[0][1] if candidates else None
 
     async def post_answer(
         self,
