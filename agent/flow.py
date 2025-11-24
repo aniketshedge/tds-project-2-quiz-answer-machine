@@ -10,6 +10,7 @@ import requests
 from config import Settings
 from tools.browser import BrowserClient
 from tools.sandbox import SandboxExecutor
+from logging_utils import log_event
 from .llm import LlmClient
 
 
@@ -56,6 +57,12 @@ class AgentFlow:
                         audio_bytes = await loop.run_in_executor(None, _get)
                         text = llm.transcribe_audio(audio_bytes)
                         transcripts.append({"url": audio_url, "text": text})
+                        log_event(
+                            "AUDIO_TRANSCRIPT",
+                            current_url=current_url,
+                            audio_url=audio_url,
+                            transcript=text,
+                        )
                     except Exception as exc:
                         # Record the error in history so the LLM can see it if needed.
                         self.history.append(
