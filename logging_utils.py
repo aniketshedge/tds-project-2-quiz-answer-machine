@@ -8,6 +8,9 @@ LOG_DIR = "logs"
 LOG_FILE = os.path.join(LOG_DIR, "agent.log")
 LLM_LOG_FILE = os.path.join(LOG_DIR, "llm_requests.log")
 
+_submission_correct_count = 0
+_submission_incorrect_count = 0
+
 
 def log_event(event_type: str, **details: Any) -> None:
     """
@@ -21,8 +24,23 @@ def log_event(event_type: str, **details: Any) -> None:
     """
     try:
         os.makedirs(LOG_DIR, exist_ok=True)
+        global _submission_correct_count, _submission_incorrect_count
+
         timestamp = datetime.utcnow().isoformat() + "Z"
         lines = [f"Event type: {event_type}", f"({timestamp})"]
+
+        # Maintain running totals of correct / incorrect submissions and
+        # include them in the header for SUBMISSION_RESULT events.
+        if event_type == "SUBMISSION_RESULT":
+            correct_flag = bool(details.get("correct"))
+            if correct_flag:
+                _submission_correct_count += 1
+            else:
+                _submission_incorrect_count += 1
+            lines.insert(
+                1,
+                f"Totals - correct: {_submission_correct_count}, incorrect: {_submission_incorrect_count}",
+            )
         for key, value in details.items():
             lines.append(f"{key}: {value}")
         lines.append("-----")
