@@ -156,7 +156,7 @@ class LlmClient:
             user_content.append(
                 {
                     "type": "input_image",
-                    "image_url": {"url": data_url},
+                    "image_url": data_url,
                 }
             )
 
@@ -165,7 +165,7 @@ class LlmClient:
             user_content.append(
                 {
                     "type": "input_image",
-                    "image_url": {"url": img_url},
+                    "image_url": img_url,
                 }
             )
 
