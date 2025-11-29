@@ -10,7 +10,7 @@ from typing import Any, Dict, List, Optional
 from openai import OpenAI, BadRequestError
 
 from config import Settings
-from logging_utils import log_event, log_llm_request
+from logging_utils import log_event, log_llm_request, log_llm_response
 from . import prompts
 
 
@@ -212,11 +212,19 @@ class LlmClient:
         )
 
         content: Optional[str] = getattr(response, "output_text", None)
+
+        # Log the full response to both the main agent log and
+        # a dedicated LLM responses log.
         log_event(
             "LLM_RESPONSE",
             model=self._model,
             current_url=current_url,
             output_full=content,
+        )
+        log_llm_response(
+            model=self._model,
+            current_url=current_url,
+            output_text=content,
         )
         if not content:
             raise RuntimeError("Model returned empty content.")

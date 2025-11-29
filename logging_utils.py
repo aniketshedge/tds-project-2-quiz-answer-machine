@@ -7,6 +7,7 @@ from typing import Any
 LOG_DIR = "logs"
 LOG_FILE = os.path.join(LOG_DIR, "agent.log")
 LLM_LOG_FILE = os.path.join(LOG_DIR, "llm_requests.log")
+LLM_RESP_LOG_FILE = os.path.join(LOG_DIR, "llm_responses.log")
 
 _submission_correct_count = 0
 _submission_incorrect_count = 0
@@ -92,6 +93,40 @@ def log_llm_request(
         ]
         record = "\n".join(lines) + "\n"
         with open(LLM_LOG_FILE, "a", encoding="utf-8") as f:
+            f.write(record)
+    except Exception:
+        # Logging failures must never break the main application flow.
+        return
+
+
+def log_llm_response(
+    model: str,
+    current_url: str,
+    output_text: Any,
+) -> None:
+    """
+    Append the full LLM response text to a dedicated log file.
+    Format:
+    Model: <model>
+    Timestamp: <ISO-UTC>
+    Current URL: <url>
+    Output:
+    <raw output_text>
+    -----
+    """
+    try:
+        os.makedirs(LOG_DIR, exist_ok=True)
+        timestamp = datetime.utcnow().isoformat() + "Z"
+        lines = [
+            f"Model: {model}",
+            f"Timestamp: {timestamp}",
+            f"Current URL: {current_url}",
+            "Output:",
+            "" if output_text is None else str(output_text),
+            "-----",
+        ]
+        record = "\n".join(lines) + "\n"
+        with open(LLM_RESP_LOG_FILE, "a", encoding="utf-8") as f:
             f.write(record)
     except Exception:
         # Logging failures must never break the main application flow.
