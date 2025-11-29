@@ -190,7 +190,11 @@ class BrowserClient:
             candidates.append((path, full_url))
 
         if not candidates:
-            return None
+            # As a last resort, fall back to a conventional /submit
+            # endpoint on the same origin, as described in the project
+            # brief. This keeps the logic generic while avoiding
+            # accidentally posting to non-submit helper URLs.
+            return urljoin(quiz_url, "/submit")
 
         # Rank candidates by proximity to "post your answer" or "submit".
         ranked: list[str] = []
@@ -205,8 +209,14 @@ class BrowserClient:
         if ranked:
             return ranked[0]
 
-        # Fallback: first candidate in discovery order.
-        return candidates[0][1] if candidates else None
+        # If nothing is explicitly marked as a submit URL, prefer any
+        # candidate whose path contains "/submit", otherwise fall back
+        # to a conventional /submit endpoint for the quiz origin.
+        for _, full_url in candidates:
+            if "/submit" in full_url:
+                return full_url
+
+        return urljoin(quiz_url, "/submit")
 
     async def post_answer(
         self,
