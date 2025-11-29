@@ -129,6 +129,11 @@ class LlmClient:
             "  process additional URLs that are explicitly mentioned in PAGE_TEXT or provided\n"
             "  via DATA_URLS (for example CSV files, API endpoints, or secondary pages like\n"
             "  `/demo-scrape-data?...`).\n"
+            "- Do NOT send HTTP POST requests to any answer submission endpoints yourself. "
+            "  Your sole responsibility is to compute the answer and print it; the outer agent "
+            "  will handle all answer submissions.\n"
+            "- Avoid printing long raw HTML or JSON blobs as the answer. Instead, extract and "
+            "  print only the specific value requested by the question.\n"
             "- If the answer can be determined directly from PAGE_TEXT and/or the images without "
             "  running complex code, you may simply output a small Python program that calls "
             "  print() on that final literal answer (for example, print(\"12345\")).\n"
@@ -175,7 +180,7 @@ class LlmClient:
                 "content": user_content,
             }
         ]
-        reasoning = {"effort": "high"}
+        reasoning = {"effort": "medium"}
 
         # Log high-level LLM request event to the main agent log.
         log_event(

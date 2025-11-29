@@ -3,7 +3,7 @@ from __future__ import annotations
 import asyncio
 import time
 from dataclasses import dataclass, field
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Optional
 
 import requests
 
@@ -46,7 +46,7 @@ class AgentFlow:
                 else:
                     return "Timed out before completing quiz."
             url_start = time.time()
-            # Per-URL time budget: allow up to ~2 minutes of work on a
+            # Per-URL time budget: allow up to ~100 seconds of work on a
             # single quiz URL, so that we can safely make multiple attempts
             # before following any redirect to the next URL. For the final
             # fallback URL (after the global deadline), we still allow a
@@ -54,7 +54,7 @@ class AgentFlow:
             if used_fallback:
                 url_deadline = url_start + 60
             else:
-                url_deadline = min(deadline, url_start + 120)
+                url_deadline = min(deadline, url_start + 100)
 
             page = await browser.get(current_url)
             page_text = page.text
@@ -115,6 +115,30 @@ class AgentFlow:
                 combined_page_text += "\n\nData resources linked from the page:\n"
                 for data_url in page.data_urls:
                     combined_page_text += f"- {data_url}\n"
+
+            # Optionally render a small number of additional HTML pages linked
+            # from this page to give the model more complete context (for
+            # example, helper pages that describe a secret code or data
+            # instructions). This remains generic: any HTML-like linked page
+            # can be included, without hardcoding quiz-specific URLs.
+            extra_pages: List[Dict[str, Any]] = []
+            if getattr(page, "linked_page_urls", None):
+                for extra_url in page.linked_page_urls[:3]:
+                    try:
+                        extra_page = await browser.get(extra_url)
+                        extra_pages.append({"url": extra_url, "text": extra_page.text})
+                    except Exception as exc:
+                        self.history.append(
+                            {
+                                "error": f"Failed to load linked page {extra_url}: {exc}",
+                                "stage": "linked_page_fetch",
+                            }
+                        )
+
+            if extra_pages:
+                combined_page_text += "\n\nAdditional linked page content:\n"
+                for item in extra_pages:
+                    combined_page_text += f"[From {item['url']}]\n{item['text']}\n"
 
             answer = None
             last_next_url: Optional[str] = None
