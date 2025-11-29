@@ -32,14 +32,29 @@ class AgentFlow:
 
         deadline = time.time() + self.settings.max_run_seconds
         current_url = self.initial_url
+        overall_last_next_url: Optional[str] = None
+        used_fallback = False
 
-        while time.time() < deadline:
-            # Per-URL time budget: allow up to ~2 minutes of work on a
-            # single quiz URL (within the overall max_run_seconds), so that
-            # we can safely make multiple attempts before following any
-            # redirect to the next URL.
+        while time.time() < deadline or (overall_last_next_url is not None and not used_fallback):
+            # If the global time budget has elapsed, but we have a latest
+            # suggested next URL that we haven't tried yet, follow it once
+            # before giving up.
+            if time.time() >= deadline:
+                if overall_last_next_url is not None and not used_fallback:
+                    current_url = overall_last_next_url
+                    used_fallback = True
+                else:
+                    return "Timed out before completing quiz."
             url_start = time.time()
-            url_deadline = min(deadline, url_start + 120)
+            # Per-URL time budget: allow up to ~2 minutes of work on a
+            # single quiz URL, so that we can safely make multiple attempts
+            # before following any redirect to the next URL. For the final
+            # fallback URL (after the global deadline), we still allow a
+            # short per-URL budget.
+            if used_fallback:
+                url_deadline = url_start + 60
+            else:
+                url_deadline = min(deadline, url_start + 120)
 
             page = await browser.get(current_url)
             page_text = page.text
@@ -106,12 +121,15 @@ class AgentFlow:
             attempt = 0
             while attempt < 3 and time.time() < url_deadline:
                 attempt += 1
+                # On the first attempt, do not send the full-page screenshot
+                # (to save tokens); from the second attempt onward, include it.
+                screenshot = page.screenshot if attempt > 1 else None
                 code = llm.plan_and_code(
                     page_text=combined_page_text,
                     history=self.history,
                     current_url=current_url,
                     email=self.email,
-                    screenshot=page.screenshot,
+                    screenshot=screenshot,
                     image_urls=page.image_urls,
                 )
 
@@ -150,10 +168,11 @@ class AgentFlow:
 
                 if submission.correct:
                     if submission.next_url:
+                        last_next_url = submission.next_url
+                        overall_last_next_url = submission.next_url
                         current_url = submission.next_url
                         self.history = []
                         # Treat this as a redirect after a successful solve.
-                        last_next_url = submission.next_url
                         break
                     return "Quiz Completed"
 
@@ -166,6 +185,7 @@ class AgentFlow:
                     # follow it yet. We keep retrying this URL while there
                     # is time left in the per-URL budget.
                     last_next_url = submission.next_url
+                    overall_last_next_url = submission.next_url
 
             # After attempts or per-URL time budget are exhausted:
             if last_next_url:
@@ -177,5 +197,4 @@ class AgentFlow:
 
             # No redirect URL was ever provided and attempts are exhausted.
             return "Failed to solve quiz within attempts."
-
         return "Timed out before completing quiz."

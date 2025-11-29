@@ -149,6 +149,15 @@ class LlmClient:
             {"type": "input_text", "text": combined_input}
         ]
 
+        # Attach a small number of inline/linked images by URL.
+        for img_url in image_urls[:3]:
+            user_content.append(
+                {
+                    "type": "input_image",
+                    "image_url": img_url,
+                }
+            )
+
         # Attach full-page screenshot if available.
         if screenshot:
             b64 = b64encode(screenshot).decode("ascii")
@@ -160,15 +169,6 @@ class LlmClient:
                 }
             )
 
-        # Attach a small number of inline/linked images by URL.
-        for img_url in image_urls[:3]:
-            user_content.append(
-                {
-                    "type": "input_image",
-                    "image_url": img_url,
-                }
-            )
-
         llm_input = [
             {
                 "role": "user",
@@ -176,6 +176,13 @@ class LlmClient:
             }
         ]
         reasoning = {"effort": "high"}
+
+        # Log high-level LLM request event to the main agent log.
+        log_event(
+            "LLM_REQUEST",
+            model=self._model,
+            current_url=current_url,
+        )
 
         # Log full LLM request to a dedicated file.
         log_llm_request(
