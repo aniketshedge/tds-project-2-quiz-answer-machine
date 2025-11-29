@@ -152,6 +152,8 @@ class AgentFlow:
                     if submission.next_url:
                         current_url = submission.next_url
                         self.history = []
+                        # Treat this as a redirect after a successful solve.
+                        last_next_url = submission.next_url
                         break
                     return "Quiz Completed"
 
