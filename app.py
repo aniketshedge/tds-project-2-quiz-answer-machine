@@ -32,9 +32,43 @@ async def validation_exception_handler(
     """
     Return HTTP 400 for invalid JSON / payloads, as required by the brief.
     """
+    status_code = status.HTTP_400_BAD_REQUEST
+    log_event(
+        "HTTP_BAD_REQUEST",
+        method=request.method,
+        path=request.url.path,
+        client_host=request.client.host if request.client else None,
+        status_code=status_code,
+        detail="Invalid JSON or request body",
+        errors=exc.errors(),
+    )
     return JSONResponse(
-        status_code=status.HTTP_400_BAD_REQUEST,
+        status_code=status_code,
         content={"detail": "Invalid JSON or request body", "errors": exc.errors()},
+    )
+
+
+@app.exception_handler(HTTPException)
+async def http_exception_handler(
+    request: Request,
+    exc: HTTPException,
+) -> JSONResponse:
+    """
+    Log all HTTPException responses (e.g. 403 invalid secret,
+    404 not found, 405 method not allowed) so that bad or
+    malformed client attempts are captured in the logs.
+    """
+    log_event(
+        "HTTP_EXCEPTION",
+        method=request.method,
+        path=request.url.path,
+        client_host=request.client.host if request.client else None,
+        status_code=exc.status_code,
+        detail=exc.detail,
+    )
+    return JSONResponse(
+        status_code=exc.status_code,
+        content={"detail": exc.detail},
     )
 
 
