@@ -48,7 +48,7 @@ Files and directories:
 - `app.py` – FastAPI app that exposes the `/run` HTTP endpoint.
 - `config.py` – loads configuration from environment variables (`.env` file).
 - `agent/flow.py` – the **main recursive loop** that actually runs the quiz.
-- `agent/llm.py` – wrapper around the OpenAI client (`gpt-5-nano` or similar).
+- `agent/llm.py` – wrapper around the OpenAI client (`gpt-5.1` or similar).
 - `agent/prompts.py` – system and user prompts used for the LLM.
 - `tools/browser.py` – uses **Playwright** to:
   - render quiz pages (with JavaScript),
@@ -262,6 +262,8 @@ If you prefer to run directly on your machine:
     "detail": "Invalid secret"
   }
   ```
+
+Other HTTP errors (such as `404 Not Found` or `405 Method Not Allowed`) are also logged internally but are handled by FastAPI’s default error responses.
 
 FastAPI automatically handles other errors with 500-series status codes if something unexpected happens.
 
