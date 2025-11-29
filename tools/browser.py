@@ -31,6 +31,7 @@ class SubmissionResponse:
     correct: bool
     next_url: Optional[str] = None
     reason: Optional[str] = None
+    delay: Optional[int] = None
 
 
 class BrowserClient:
@@ -277,6 +278,7 @@ class BrowserClient:
         correct = bool(data.get("correct"))
         next_url = data.get("url")
         reason = data.get("reason")
+        delay = data.get("delay")
 
         safe_payload = dict(payload)
         if "secret" in safe_payload:
@@ -299,4 +301,4 @@ class BrowserClient:
             raw_response=json.dumps(data),
         )
 
-        return SubmissionResponse(correct=correct, next_url=next_url, reason=reason)
+        return SubmissionResponse(correct=correct, next_url=next_url, reason=reason, delay=delay)

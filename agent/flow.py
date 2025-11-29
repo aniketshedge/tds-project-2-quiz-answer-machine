@@ -4,7 +4,6 @@ import asyncio
 import time
 from dataclasses import dataclass, field
 from typing import Any, Dict, List, Optional
-
 import requests
 
 from config import Settings
@@ -116,6 +115,43 @@ class AgentFlow:
                 for data_url in page.data_urls:
                     combined_page_text += f"- {data_url}\n"
 
+                # For CSV resources, fetch a small preview (first few
+                # lines) to give the model additional context
+                # about table structure. This is generic and does not
+                # assume anything about the quiz beyond the presence of
+                # CSV files.
+                csv_previews: List[Dict[str, Any]] = []
+                loop = asyncio.get_running_loop()
+                for csv_url in page.data_urls[:3]:
+                    try:
+                        def _get_csv() -> str:
+                            resp = requests.get(
+                                csv_url,
+                                timeout=self.settings.browser_timeout_ms / 1000,
+                            )
+                            resp.raise_for_status()
+                            return resp.text
+
+                        csv_text = await loop.run_in_executor(None, _get_csv)
+                        lines = csv_text.splitlines()
+                        if not lines:
+                            continue
+                        # Take the first up to 5 raw lines as-is.
+                        preview = "\n".join(lines[:5])
+                        csv_previews.append({"url": csv_url, "preview": preview})
+                    except Exception as exc:
+                        self.history.append(
+                            {
+                                "error": f"Failed to load CSV preview from {csv_url}: {exc}",
+                                "stage": "csv_preview",
+                            }
+                        )
+
+                if csv_previews:
+                    combined_page_text += "\n\nCSV previews (first up to 5 non-empty rows):\n"
+                    for item in csv_previews:
+                        combined_page_text += f"[From {item['url']}]\n{item['preview']}\n"
+
             # Optionally render a small number of additional HTML pages linked
             # from this page to give the model more complete context (for
             # example, helper pages that describe a secret code or data
@@ -143,7 +179,8 @@ class AgentFlow:
             answer = None
             last_next_url: Optional[str] = None
             attempt = 0
-            while attempt < 3 and time.time() < url_deadline:
+            max_attempts = 20
+            while attempt < max_attempts and time.time() < url_deadline:
                 attempt += 1
                 # On the first attempt, do not send the full-page screenshot
                 # (to save tokens); from the second attempt onward, include it.
@@ -210,6 +247,11 @@ class AgentFlow:
                     # is time left in the per-URL budget.
                     last_next_url = submission.next_url
                     overall_last_next_url = submission.next_url
+
+                # If the evaluator advises a large delay, stop retrying
+                # this URL early to avoid wasting attempts.
+                if submission.delay is not None and submission.delay >= 350:
+                    break
 
             # After attempts or per-URL time budget are exhausted:
             if last_next_url:
