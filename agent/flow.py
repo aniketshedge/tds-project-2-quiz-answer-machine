@@ -34,6 +34,13 @@ class AgentFlow:
         current_url = self.initial_url
 
         while time.time() < deadline:
+            # Per-URL time budget: allow up to ~2 minutes of work on a
+            # single quiz URL (within the overall max_run_seconds), so that
+            # we can safely make multiple attempts before following any
+            # redirect to the next URL.
+            url_start = time.time()
+            url_deadline = min(deadline, url_start + 120)
+
             page = await browser.get(current_url)
             page_text = page.text
 
@@ -95,7 +102,10 @@ class AgentFlow:
                     combined_page_text += f"- {data_url}\n"
 
             answer = None
-            for attempt in range(3):
+            last_next_url: Optional[str] = None
+            attempt = 0
+            while attempt < 3 and time.time() < url_deadline:
+                attempt += 1
                 code = llm.plan_and_code(
                     page_text=combined_page_text,
                     history=self.history,
@@ -124,7 +134,7 @@ class AgentFlow:
                         {
                             "error": exec_result.stderr[:300],
                             "stage": "execution",
-                            "attempt": attempt + 1,
+                            "attempt": attempt,
                         }
                     )
 
@@ -147,14 +157,23 @@ class AgentFlow:
 
                 # Incorrect answer handling
                 error_reason = submission.reason or "Incorrect answer"
-                self.history.append({"error": error_reason, "attempt": attempt + 1})
+                self.history.append({"error": error_reason, "attempt": attempt})
 
                 if submission.next_url:
-                    current_url = submission.next_url
-                    break
+                    # Remember the latest suggested next URL, but do not
+                    # follow it yet. We keep retrying this URL while there
+                    # is time left in the per-URL budget.
+                    last_next_url = submission.next_url
 
-            # If inner loop exhausted without success and no redirect, stop.
-            else:
-                return "Failed to solve quiz within attempts."
+            # After attempts or per-URL time budget are exhausted:
+            if last_next_url:
+                # Follow only the final suggested next URL from the last
+                # attempt made for this question.
+                current_url = last_next_url
+                # Keep history so the next URL can see previous context.
+                continue
+
+            # No redirect URL was ever provided and attempts are exhausted.
+            return "Failed to solve quiz within attempts."
 
         return "Timed out before completing quiz."
