@@ -7,7 +7,7 @@ from pydantic import BaseSettings, AnyHttpUrl
 class Settings(BaseSettings):
     openai_api_key: str
     openai_base_url: Optional[AnyHttpUrl] = None
-    openai_model: str = "gpt-5.1-nano"
+    openai_model: str = "gpt-5.1"
     openai_transcription_model: str = "gpt-4o-mini-transcribe"
 
     student_secret: str

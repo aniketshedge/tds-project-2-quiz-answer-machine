@@ -178,7 +178,7 @@ class LlmClient:
                     "content": user_content,
                 }
             ],
-            reasoning={"effort": "medium"},
+            reasoning={"effort": "high"},
         )
 
         content: Optional[str] = getattr(response, "output_text", None)
