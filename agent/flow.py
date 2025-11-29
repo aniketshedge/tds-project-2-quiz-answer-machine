@@ -101,6 +101,8 @@ class AgentFlow:
                     history=self.history,
                     current_url=current_url,
                     email=self.email,
+                    screenshot=page.screenshot,
+                    image_urls=page.image_urls,
                 )
 
                 # Provide the JS-rendered page context and discovered data URLs

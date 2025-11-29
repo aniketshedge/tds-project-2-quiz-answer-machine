@@ -22,6 +22,7 @@ class PageData:
     html: Optional[str] = None
     audio_urls: List[str] = field(default_factory=list)
     data_urls: List[str] = field(default_factory=list)
+    image_urls: List[str] = field(default_factory=list)
 
 
 @dataclass
@@ -58,6 +59,7 @@ class BrowserClient:
 
         audio_urls: List[str] = []
         data_urls: List[str] = []
+        image_urls: List[str] = []
 
         if html:
             soup = BeautifulSoup(html, "html.parser")
@@ -78,6 +80,22 @@ class BrowserClient:
                 if any(href.lower().endswith(ext) for ext in data_exts):
                     data_urls.append(urljoin(url, href))
 
+            # Image sources (inline or linked).
+            image_exts = (".png", ".jpg", ".jpeg", ".gif", ".webp", ".svg")
+            for img in soup.find_all("img"):
+                src = img.get("src")
+                if not src:
+                    continue
+                src = src.strip()
+                if not src:
+                    continue
+                # Inline base64-encoded images.
+                if src.startswith("data:image/"):
+                    image_urls.append(src)
+                else:
+                    # Resolve relative paths against the current page URL.
+                    image_urls.append(urljoin(url, src))
+
         return PageData(
             url=url,
             text=text,
@@ -85,6 +103,7 @@ class BrowserClient:
             html=html,
             audio_urls=audio_urls,
             data_urls=data_urls,
+            image_urls=image_urls,
         )
 
     def _identify_submission_target(self, page_text: str, quiz_url: str) -> Optional[str]:

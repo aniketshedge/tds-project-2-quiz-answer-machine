@@ -96,6 +96,8 @@ class LlmClient:
         history: List[Dict[str, Any]],
         current_url: str,
         email: str,
+        screenshot: Optional[bytes],
+        image_urls: List[str],
     ) -> str:
         """
         Ask the model to propose Python code that, when executed, produces
@@ -140,10 +142,42 @@ class LlmClient:
             current_url=current_url,
         )
 
+        # Build multimodal input: main text plus screenshot and any discovered images.
+        from base64 import b64encode
+
+        user_content: List[Dict[str, Any]] = [
+            {"type": "input_text", "text": combined_input}
+        ]
+
+        # Attach full-page screenshot if available.
+        if screenshot:
+            b64 = b64encode(screenshot).decode("ascii")
+            data_url = f"data:image/png;base64,{b64}"
+            user_content.append(
+                {
+                    "type": "input_image",
+                    "image_url": {"url": data_url},
+                }
+            )
+
+        # Attach a small number of inline/linked images by URL.
+        for img_url in image_urls[:3]:
+            user_content.append(
+                {
+                    "type": "input_image",
+                    "image_url": {"url": img_url},
+                }
+            )
+
         response = self._client.responses.create(
             model=self._model,
             instructions=prompts.SYSTEM_PROMPT,
-            input=combined_input,
+            input=[
+                {
+                    "role": "user",
+                    "content": user_content,
+                }
+            ],
             reasoning={"effort": "medium"},
         )
 
