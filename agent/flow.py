@@ -253,6 +253,12 @@ class AgentFlow:
                 if submission.delay is not None and submission.delay >= 350:
                     break
 
+                # If we have already tried this URL several times and a
+                # next_url has been provided, move on to maximize coverage
+                # of downstream questions.
+                if last_next_url is not None and attempt >= 5:
+                    break
+
             # After attempts or per-URL time budget are exhausted:
             if last_next_url:
                 # Follow only the final suggested next URL from the last
