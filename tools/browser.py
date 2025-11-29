@@ -9,7 +9,7 @@ from typing import Optional, List
 import requests
 from bs4 import BeautifulSoup
 from playwright.async_api import async_playwright
-from urllib.parse import urljoin
+from urllib.parse import urljoin, urlparse
 
 from logging_utils import log_event
 
@@ -156,6 +156,8 @@ class BrowserClient:
         such as "/submit", resolving the latter against the quiz_url.
         """
         quiz_url_lower = quiz_url.strip().lower()
+        quiz_parsed = urlparse(quiz_url)
+        quiz_path = quiz_parsed.path
         lower_text = page_text.lower()
 
         # Collect candidate (display_text, absolute_url) pairs.
@@ -164,11 +166,17 @@ class BrowserClient:
         # 1) Absolute URLs.
         abs_urls = re.findall(r"https?://[^\s\"'<>]+", page_text)
         for url in abs_urls:
-            full_url = url.strip()
+            full_url = url.strip().rstrip(".,);")
             if not full_url:
                 continue
             full_lower = full_url.lower()
             if full_lower == quiz_url_lower:
+                continue
+            # Skip URLs that point back to the same path as the quiz URL;
+            # these are typically used for the `url` field in the JSON
+            # payload, not as the submission endpoint.
+            parsed = urlparse(full_url)
+            if parsed.path == quiz_path:
                 continue
             if any(full_url == existing_full for _, existing_full in candidates):
                 continue
@@ -178,12 +186,15 @@ class BrowserClient:
         # 2) Relative paths starting with "/".
         rel_paths = re.findall(r"/[^\s\"'<>]+", page_text)
         for path in rel_paths:
-            path = path.strip()
+            path = path.strip().rstrip(".,);")
             if not path:
                 continue
             full_url = urljoin(quiz_url, path)
             full_lower = full_url.lower()
             if full_lower == quiz_url_lower:
+                continue
+            parsed = urlparse(full_url)
+            if parsed.path == quiz_path:
                 continue
             if any(full_url == existing_full for _, existing_full in candidates):
                 continue
