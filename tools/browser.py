@@ -172,15 +172,14 @@ class BrowserClient:
             full_lower = full_url.lower()
             if full_lower == quiz_url_lower:
                 continue
+            parsed = urlparse(full_url)
             # Skip URLs that point back to the same path as the quiz URL;
             # these are typically used for the `url` field in the JSON
             # payload, not as the submission endpoint.
-            parsed = urlparse(full_url)
             if parsed.path == quiz_path:
                 continue
             if any(full_url == existing_full for _, existing_full in candidates):
                 continue
-            # display_text == full_url for absolute URLs.
             candidates.append((full_url, full_url))
 
         # 2) Relative paths starting with "/".
@@ -200,33 +199,32 @@ class BrowserClient:
                 continue
             candidates.append((path, full_url))
 
-        if not candidates:
-            # As a last resort, fall back to a conventional /submit
-            # endpoint on the same origin, as described in the project
-            # brief. This keeps the logic generic while avoiding
-            # accidentally posting to non-submit helper URLs.
-            return urljoin(quiz_url, "/submit")
-
-        # Rank candidates by proximity to "post your answer" or "submit".
-        ranked: list[str] = []
-        for display_text, full_url in candidates:
-            idx = lower_text.find(display_text.lower())
-            if idx == -1:
-                continue
-            window = lower_text[max(0, idx - 120) : idx + 120]
-            if "post your answer" in window or "submit" in window:
-                ranked.append(full_url)
-
-        if ranked:
-            return ranked[0]
-
-        # If nothing is explicitly marked as a submit URL, prefer any
-        # candidate whose path contains "/submit", otherwise fall back
-        # to a conventional /submit endpoint for the quiz origin.
+        # Filter to URLs whose path looks like a submit endpoint.
+        submit_candidates: list[str] = []
         for _, full_url in candidates:
-            if "/submit" in full_url:
-                return full_url
+            parsed = urlparse(full_url)
+            if "/submit" in parsed.path:
+                submit_candidates.append(full_url)
 
+        # If we found one or more explicit submit endpoints, prefer
+        # those, optionally using proximity to "post your answer" or
+        # "submit" to break ties.
+        if submit_candidates:
+            ranked: list[str] = []
+            for full_url in submit_candidates:
+                idx = lower_text.find(full_url.lower())
+                if idx == -1:
+                    continue
+                window = lower_text[max(0, idx - 120) : idx + 120]
+                if "post your answer" in window or "submit" in window:
+                    ranked.append(full_url)
+            if ranked:
+                return ranked[0]
+            return submit_candidates[0]
+
+        # As a generic fallback (when no explicit submit URL is found
+        # in the page text), post to a conventional /submit endpoint on
+        # the same origin, as described in the project brief.
         return urljoin(quiz_url, "/submit")
 
     async def post_answer(
