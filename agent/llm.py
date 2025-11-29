@@ -10,7 +10,7 @@ from typing import Any, Dict, List, Optional
 from openai import OpenAI, BadRequestError
 
 from config import Settings
-from logging_utils import log_event
+from logging_utils import log_event, log_llm_request
 from . import prompts
 
 
@@ -142,12 +142,6 @@ class LlmClient:
             f"Previous attempts and errors:\n{history}"
         )
 
-        log_event(
-            "LLM_REQUEST",
-            model=self._model,
-            current_url=current_url,
-        )
-
         # Build multimodal input: main text plus screenshot and any discovered images.
         from base64 import b64encode
 
@@ -175,16 +169,28 @@ class LlmClient:
                 }
             )
 
+        llm_input = [
+            {
+                "role": "user",
+                "content": user_content,
+            }
+        ]
+        reasoning = {"effort": "high"}
+
+        # Log full LLM request to a dedicated file.
+        log_llm_request(
+            model=self._model,
+            current_url=current_url,
+            instructions=prompts.SYSTEM_PROMPT,
+            input_payload=llm_input,
+            reasoning=reasoning,
+        )
+
         response = self._client.responses.create(
             model=self._model,
             instructions=prompts.SYSTEM_PROMPT,
-            input=[
-                {
-                    "role": "user",
-                    "content": user_content,
-                }
-            ],
-            reasoning={"effort": "high"},
+            input=llm_input,
+            reasoning=reasoning,
         )
 
         content: Optional[str] = getattr(response, "output_text", None)
